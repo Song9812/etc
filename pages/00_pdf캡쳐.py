@@ -4,21 +4,10 @@ import io
 from PIL import Image, ImageDraw, ImageFont # Pillow 라이브러리 (ImageDraw, ImageFont 추가)
 import zipfile
 
-# Pillow에서 사용할 폰트 설정 (Windows 기준, Mac/Linux는 경로 다를 수 있음)
-# 일반적으로 Arial.ttf는 대부분의 시스템에 존재합니다.
-# 시스템에 폰트가 없으면 기본 폰트를 사용하거나 에러 발생 가능
-try:
-    # 폰트 경로를 직접 지정하거나, 시스템에 따라 다른 폰트 사용
-    # 예: Windows의 경우 'C:/Windows/Fonts/Arial.ttf'
-    # macOS의 경우 '/Library/Fonts/Arial Unicode.ttf' 또는 '/System/Library/Fonts/SFCompactText-Regular.otf'
-    # Linux (Ubuntu)의 경우 '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf' 등
-    font_path = "arial.ttf" # 또는 "NanumGothic.ttf" 등 시스템에 있는 폰트명
-    # Pillow의 ImageFont.truetype 함수는 파일 경로를 요구합니다.
-    # 만약 에러가 발생하면 시스템의 폰트 경로를 찾아서 사용해야 합니다.
-    font = ImageFont.truetype(font_path, 15)
-except IOError:
-    st.warning("폰트를 찾을 수 없습니다. 기본 폰트로 대체됩니다. (좌표 숫자 가독성 저하 가능)")
-    font = ImageFont.load_default()
+# Pillow에서 사용할 기본 폰트 설정
+# 시스템 폰트 경로를 지정하지 않아도 되므로 SyntaxError 발생 가능성이 줄어듭니다.
+# 단, 숫자의 가독성이 다소 떨어질 수 있습니다.
+font = ImageFont.load_default()
 
 # 세션 상태 초기화 (업로드 플래그)
 if 'pdf_uploaded_flag' not in st.session_state:
