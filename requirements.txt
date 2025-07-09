@@ -3,3 +3,9 @@ PyMuPDF
 Pillow
 streamlit-drawable-canvas
 pypdf
+pandas
+wordcloud
+matplotlib
+konlpy
+openpyxl
+JPype1==1.4.1
