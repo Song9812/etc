@@ -4,7 +4,8 @@ from wordcloud import WordCloud
 from collections import Counter
 from konlpy.tag import Okt
 import matplotlib.pyplot as plt
-import io # 바이트 스트림 처리를 위해 import
+import io
+import os 
 
 # --- Streamlit 페이지 설정 ---
 st.set_page_config(
