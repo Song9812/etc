@@ -7,3 +7,4 @@ pandas
 networkx
 matplotlib
 openpyxl
+pyvis.network
