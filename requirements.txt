@@ -3,8 +3,7 @@ PyMuPDF
 Pillow
 streamlit-drawable-canvas
 pypdf
+streamlit
 pandas
 networkx
-matplotlib
-openpyxl
-pyvis.network
+pyvis
