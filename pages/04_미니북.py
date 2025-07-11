@@ -38,7 +38,7 @@ def create_mini_book_pdf(input_pdf_bytes):
             original_page_idx = page_info['page_idx']
             x_offset = page_info['x_offset']
             y_offset = page_info['y_offset']
-            rotation_degrees = page_info['rotation'] # 변수명 변경
+            rotation_degrees = page_info['rotation']
 
             if original_page_idx >= len(input_pdf):
                 st.warning(f"경고: 원본 PDF에 {original_page_idx + 1} 페이지가 없습니다. 레이아웃 설정을 확인하세요.")
@@ -60,21 +60,18 @@ def create_mini_book_pdf(input_pdf_bytes):
             scale = min(scale_x, scale_y) # 종횡비 유지
 
             # --- 이 부분이 핵심 수정! ---
-            # 1. 스케일링 매트릭스 생성
-            scale_matrix = fitz.Matrix(scale, scale)
+            # 1. 기본 스케일링 매트릭스
+            base_matrix = fitz.Matrix(scale, scale)
 
-            # 2. 회전 매트릭스 생성 (각도를 라디안으로 변환하여 전달)
-            # PyMuPDF Matrix 생성자의 인자 순서는 sx, sy, shear_x, shear_y, tx, ty, rotate
-            # 회전만 할 때는 Matrix(1, 1, 0, 0, 0, 0, angle_radians)
-            # 또는 Matrix().prerotate(angle_radians) / postrotate(angle_radians)
-            # 가장 범용적인 방법은 Matrix(rotation=각도)이지만, 이것이 안 되므로 직접 라디안 값을 사용하는 Matrix 생성자를 씁니다.
-            rotation_radians = math.radians(rotation_degrees) # 각도를 라디안으로 변환
-            rotate_matrix = fitz.Matrix(1, 1, 0, 0, 0, 0, rotation_radians)
+            # 2. 회전 (base_matrix에 회전 적용)
+            # PyMuPDF의 Matrix.rotate() 메서드는 기존 매트릭스에 회전을 적용하여 새 매트릭스를 반환
+            # 각도를 라디안으로 변환
+            rotation_radians = math.radians(rotation_degrees)
+            rotated_matrix = base_matrix.prerotate(rotation_radians) # prerotate 사용
 
-            # 회전 후의 페이지 바운딩 박스 계산을 위해 일단 스케일 + 회전만 적용한 매트릭스
-            combined_matrix_for_bbox = scale_matrix * rotate_matrix
-
-            rotated_bbox = orig_page.rect.transform(combined_matrix_for_bbox)
+            # 회전 후의 페이지 바운딩 박스 계산
+            # 원본 페이지의 사각형을 회전된 매트릭스로 변환하여 최종 크기 계산
+            rotated_bbox = orig_page.rect.transform(rotated_matrix)
             rotated_width = rotated_bbox.width
             rotated_height = rotated_bbox.height
 
@@ -82,16 +79,14 @@ def create_mini_book_pdf(input_pdf_bytes):
             center_x_offset = (target_width - rotated_width) / 2
             center_y_offset = (target_height - rotated_height) / 2
 
-            # 4. 최종 변환 매트릭스 합성 (스케일 -> 회전 -> 이동 순서)
-            # PyMuPDF의 행렬은 (x', y') = (x, y) * M 이므로,
-            # (원본) * 스케일 * 회전 * 이동 순서로 곱해야 합니다.
-            # translate 매트릭스는 최종 위치로 옮기는 역할을 합니다.
-            translate_matrix = fitz.Matrix(1, 0, 0, 1, x_offset + center_x_offset, y_offset + center_y_offset)
+            # 3. 이동 매트릭스 (회전된 페이지를 최종 위치로 옮김)
+            # PyMuPDF의 show_pdf_page는 매트릭스의 tx, ty를 사용하여 페이지의 좌상단 이동을 제어
+            # 따라서 최종 매트릭스는 스케일 + 회전 + 이동이 모두 포함되어야 함
+            final_matrix = rotated_matrix.pretranslate(x_offset + center_x_offset, y_offset + center_y_offset)
 
-            # 최종 매트릭스 = (스케일 매트릭스 * 회전 매트릭스) * 이동 매트릭스
-            final_matrix = scale_matrix * rotate_matrix * translate_matrix
-
-            # 새 페이지에 원본 페이지 그리기 (매트릭스 사용)
+            # 새 페이지에 원본 페이지 그리기 (final_matrix 사용)
+            # new_page.rect는 대상 페이지의 전체 크기를 나타냄 (클리핑 영역 역할)
+            # matrix 인자로 페이지의 변환 (스케일, 회전, 이동)을 모두 제어
             new_page.show_pdf_page(new_page.rect, input_pdf, original_page_idx, matrix=final_matrix)
 
         # 결과 PDF를 메모리에 저장
