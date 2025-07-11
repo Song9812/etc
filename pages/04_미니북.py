@@ -1,6 +1,7 @@
 import streamlit as st
 import fitz  # PyMuPDF
 import io
+import math # math 모듈 임포트
 
 # --- 페이지 레이아웃 정의 (A4 기준) ---
 # 기존과 동일
@@ -37,7 +38,7 @@ def create_mini_book_pdf(input_pdf_bytes):
             original_page_idx = page_info['page_idx']
             x_offset = page_info['x_offset']
             y_offset = page_info['y_offset']
-            rotation = page_info['rotation']
+            rotation_degrees = page_info['rotation'] # 변수명 변경
 
             if original_page_idx >= len(input_pdf):
                 st.warning(f"경고: 원본 PDF에 {original_page_idx + 1} 페이지가 없습니다. 레이아웃 설정을 확인하세요.")
@@ -62,10 +63,14 @@ def create_mini_book_pdf(input_pdf_bytes):
             # 1. 스케일링 매트릭스 생성
             scale_matrix = fitz.Matrix(scale, scale)
 
-            # 2. 회전 매트릭스 생성
-            rotate_matrix = fitz.Matrix(rotation=rotation)
+            # 2. 회전 매트릭스 생성 (각도를 라디안으로 변환하여 전달)
+            # PyMuPDF Matrix 생성자의 인자 순서는 sx, sy, shear_x, shear_y, tx, ty, rotate
+            # 회전만 할 때는 Matrix(1, 1, 0, 0, 0, 0, angle_radians)
+            # 또는 Matrix().prerotate(angle_radians) / postrotate(angle_radians)
+            # 가장 범용적인 방법은 Matrix(rotation=각도)이지만, 이것이 안 되므로 직접 라디안 값을 사용하는 Matrix 생성자를 씁니다.
+            rotation_radians = math.radians(rotation_degrees) # 각도를 라디안으로 변환
+            rotate_matrix = fitz.Matrix(1, 1, 0, 0, 0, 0, rotation_radians)
 
-            # 3. 이동 매트릭스 생성 (나중에 중앙 정렬 오프셋과 함께 적용)
             # 회전 후의 페이지 바운딩 박스 계산을 위해 일단 스케일 + 회전만 적용한 매트릭스
             combined_matrix_for_bbox = scale_matrix * rotate_matrix
 
@@ -87,7 +92,6 @@ def create_mini_book_pdf(input_pdf_bytes):
             final_matrix = scale_matrix * rotate_matrix * translate_matrix
 
             # 새 페이지에 원본 페이지 그리기 (매트릭스 사용)
-            # show_pdf_page는 원본 페이지를 매트릭스로 변환하여 대상 문서에 그립니다.
             new_page.show_pdf_page(new_page.rect, input_pdf, original_page_idx, matrix=final_matrix)
 
         # 결과 PDF를 메모리에 저장
