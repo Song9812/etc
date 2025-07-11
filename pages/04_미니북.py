@@ -4,7 +4,6 @@ import io
 
 # --- 페이지 레이아웃 정의 (A4 기준) ---
 # 기존과 동일
-
 A4_LANDSCAPE_WIDTH = 842
 A4_LANDSCAPE_HEIGHT = 595
 
@@ -61,14 +60,16 @@ def create_mini_book_pdf(input_pdf_bytes):
 
             # --- 이 부분이 핵심 수정! ---
             # 1. 스케일링 매트릭스 생성
-            matrix = fitz.Matrix(scale, scale)
+            scale_matrix = fitz.Matrix(scale, scale)
 
-            # 2. 회전 (중심 기준으로 회전하지 않으므로, 나중에 translate로 위치 조정)
-            if rotation != 0:
-                matrix = matrix.pre_concat(fitz.Matrix(rotation=rotation))
+            # 2. 회전 매트릭스 생성
+            rotate_matrix = fitz.Matrix(rotation=rotation)
 
-            # 회전 후의 페이지 바운딩 박스 계산
-            rotated_bbox = orig_page.rect.transform(matrix)
+            # 3. 이동 매트릭스 생성 (나중에 중앙 정렬 오프셋과 함께 적용)
+            # 회전 후의 페이지 바운딩 박스 계산을 위해 일단 스케일 + 회전만 적용한 매트릭스
+            combined_matrix_for_bbox = scale_matrix * rotate_matrix
+
+            rotated_bbox = orig_page.rect.transform(combined_matrix_for_bbox)
             rotated_width = rotated_bbox.width
             rotated_height = rotated_bbox.height
 
@@ -76,28 +77,17 @@ def create_mini_book_pdf(input_pdf_bytes):
             center_x_offset = (target_width - rotated_width) / 2
             center_y_offset = (target_height - rotated_height) / 2
 
-            # 최종 위치로 이동 (x, y)
-            # PyMuPDF의 show_pdf_page는 rect를 주거나, matrix와 point를 조합하여 사용
-            # 가장 확실한 방법은, 페이지가 그려질 최종 사각형(rect)을 계산하고 이를 사용하는 것.
-            # 또는, 최종 매트릭스를 구성하여 show_pdf_page의 matrix 인자로 전달.
+            # 4. 최종 변환 매트릭스 합성 (스케일 -> 회전 -> 이동 순서)
+            # PyMuPDF의 행렬은 (x', y') = (x, y) * M 이므로,
+            # (원본) * 스케일 * 회전 * 이동 순서로 곱해야 합니다.
+            # translate 매트릭스는 최종 위치로 옮기는 역할을 합니다.
+            translate_matrix = fitz.Matrix(1, 0, 0, 1, x_offset + center_x_offset, y_offset + center_y_offset)
 
-            # 최종 매트릭스: 스케일 -> 회전 -> 이동
-            # PyMuPDF의 행렬은 (x', y') = (x, y) * M 이므로, 이동이 마지막에 와야 함
-            final_matrix = fitz.Matrix(scale, scale)
-            if rotation != 0:
-                final_matrix = final_matrix.pre_concat(fitz.Matrix(rotation=rotation))
-
-            # 최종 이동 (이동 매트릭스를 pre_concat 하는 방식)
-            # PyMuPDF의 translate는 기존 매트릭스에 이동을 더함
-            # 여기서는 목표 위치로 정확히 옮기기 위해 x_offset, y_offset + 중앙 정렬 오프셋을 직접 더함
-            final_matrix = final_matrix.pre_translate(x_offset + center_x_offset, y_offset + center_y_offset)
-
+            # 최종 매트릭스 = (스케일 매트릭스 * 회전 매트릭스) * 이동 매트릭스
+            final_matrix = scale_matrix * rotate_matrix * translate_matrix
 
             # 새 페이지에 원본 페이지 그리기 (매트릭스 사용)
             # show_pdf_page는 원본 페이지를 매트릭스로 변환하여 대상 문서에 그립니다.
-            # rect 인자는 주로 clipping 영역을 정의할 때 사용하며, 매트릭스로 위치를 직접 제어할 때는
-            # 보통 대상 페이지 전체 영역을 주거나, None으로 두기도 합니다.
-            # 여기서는 매트릭스가 모든 위치, 스케일, 회전을 정의하므로 rect는 중요하지 않음.
             new_page.show_pdf_page(new_page.rect, input_pdf, original_page_idx, matrix=final_matrix)
 
         # 결과 PDF를 메모리에 저장
