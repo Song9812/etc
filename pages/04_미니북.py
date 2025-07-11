@@ -124,4 +124,78 @@ def create_mini_book_pdf(input_pdf_bytes):
             # matrix: 변환 매트릭스 (스케일, 회전, 이동)
 
             # 새 페이지에 원본 페이지 그리기 (매트릭스 사용)
-            # PyMuPDF의 Matrix는 post-multiply
+            # PyMuPDF의 Matrix는 post-multiply 방식으로 적용됨.
+            # 따라서 이동(translate)은 마지막에 적용되어야 함.
+            # rotate된 페이지를 최종 위치로 옮기기 위한 translate 매트릭스 추가
+            final_matrix = fitz.Matrix(scale, scale)
+            if rotation == 90:
+                final_matrix = final_matrix.pre_rotate(90)
+            elif rotation == 180:
+                final_matrix = final_matrix.pre_rotate(180)
+            elif rotation == 270:
+                final_matrix = final_matrix.pre_rotate(270)
+
+            # 최종 위치로 이동 (x, y)
+            final_matrix = final_matrix.pre_translate(final_x, final_y)
+
+            # 원본 페이지의 내용을 새 페이지에 그립니다.
+            # draw_pdf_page는 첫 번째 인자로 사각형을 받지만, 실제로는 matrix로 모든 변환을 제어하는 것이 일반적
+            # 여기서는 전체 A4 페이지를 rect로 주고, matrix로 페이지를 그릴 위치를 조정.
+            new_page.show_pdf_page(fitz.Rect(0, 0, A4_LANDSCAPE_WIDTH, A4_LANDSCAPE_HEIGHT), input_pdf, original_page_idx, matrix=final_matrix)
+
+
+        # 결과 PDF를 메모리에 저장
+        output_buffer = io.BytesIO()
+        output_pdf.save(output_buffer)
+        output_pdf.close()
+        input_pdf.close()
+        return output_buffer.getvalue()
+
+    except Exception as e:
+        st.error(f"PDF 변환 중 오류가 발생했습니다: {e}")
+        return None
+
+# --- Streamlit 앱 UI ---
+st.set_page_config(layout="centered", page_title="미니북 PDF 변환기")
+
+st.title("✂️ 8페이지 미니북 PDF 변환기")
+
+st.markdown("""
+A4 용지 한 장으로 만들 수 있는 8페이지 미니북 PDF를 생성합니다.
+8페이지 PDF를 업로드하면, 인쇄 후 바로 접을 수 있도록 페이지 순서와 방향을 조절하여 하나의 A4 PDF로 만들어 드립니다.
+
+**⚠️ 중요**: 이 도구는 특정 미니북 접는 방식을 가정하고 있습니다.
+인쇄 후 올바르게 접히는지 확인하기 위해 **[미니북 접는 방법](https://www.google.com/search?q=a4+%EB%AF%B8%EB%8B%8B%EC%9B%85+%EB%A7%8C%EB%93%A4%EA%B8%B0&tbm=vid)**을 참고해주세요!
+(예시 검색 링크이며, 정확한 접는 방법을 영상으로 확인하시는 것을 추천합니다.)
+""")
+
+uploaded_file = st.file_uploader("8페이지 PDF 파일을 업로드하세요", type=["pdf"])
+
+if uploaded_file is not None:
+    st.info("PDF 파일을 읽는 중...")
+    pdf_bytes = uploaded_file.read()
+
+    with st.spinner("미니북 PDF를 생성 중입니다... 📄"):
+        transformed_pdf_bytes = create_mini_book_pdf(pdf_bytes)
+
+    if transformed_pdf_bytes:
+        st.success("미니북 PDF 생성이 완료되었습니다! 🎉")
+        st.download_button(
+            label="미니북 PDF 다운로드",
+            data=transformed_pdf_bytes,
+            file_name="minibook_output.pdf",
+            mime="application/pdf"
+        )
+        st.markdown("""
+        **[다운로드]** 받은 PDF를 A4 용지에 **가로(Landscape) 방향**으로 인쇄하세요.
+        """)
+        st.subheader("미니북 접는 방법 (예시)")
+        st.markdown("""
+        1.  인쇄된 A4 용지를 가로로 놓습니다.
+        2.  정확한 미니북을 만들기 위해 **[이 영상](https://www.youtube.com/watch?v=F0pYdE69y64)** (예시 유튜브 링크)을 참고하여 종이를 접고 칼집을 내세요.
+        """)
+    else:
+        st.error("PDF 변환에 실패했습니다. 파일을 다시 확인해주세요.")
+
+st.markdown("---")
+st.markdown("Made with ❤️ by Your Name")
